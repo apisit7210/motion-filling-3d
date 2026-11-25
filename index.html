@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion Filling 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f5f2; --surface:#ffffff; --surface-2:#eceee9; --line:#d5d8d0;
+  --ink:#1d2321; --ink-2:#4f5753; --ink-3:#7c847f;
+  --accent:#0f7b6c; --accent-ink:#ffffff;
+  --water:#1f7fd1; --tappet1:#1f7fd1; --tappet2:#d49a00; --bottle:#c2410c; --nozzle:#0f7b6c;
+  --bad:#c0392b; --good:#1e8e3e; --warn:#b7791f;
+  --scene-bg:#e9ece6; --floor:#d9ddd4;
+  --radius:12px;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  --sans:'Noto Sans Thai',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111513; --surface:#191e1c; --surface-2:#212725; --line:#2f3633;
+    --ink:#e6ebe8; --ink-2:#aab3ae; --ink-3:#7d8682;
+    --accent:#3cc2ad; --accent-ink:#0b1412;
+    --water:#4aa3f0; --tappet1:#4aa3f0; --tappet2:#f0bd3a; --bottle:#f08a4b; --nozzle:#3cc2ad;
+    --bad:#ef6b5b; --good:#56c46f; --warn:#e0a84a;
+    --scene-bg:#161b19; --floor:#1f2522;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111513; --surface:#191e1c; --surface-2:#212725; --line:#2f3633;
+  --ink:#e6ebe8; --ink-2:#aab3ae; --ink-3:#7d8682;
+  --accent:#3cc2ad; --accent-ink:#0b1412;
+  --water:#4aa3f0; --tappet1:#4aa3f0; --tappet2:#f0bd3a; --bottle:#f08a4b; --nozzle:#3cc2ad;
+  --bad:#ef6b5b; --good:#56c46f; --warn:#e0a84a;
+  --scene-bg:#161b19; --floor:#1f2522;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:15px}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 16px 48px}
+header h1{font-size:clamp(22px,3vw,30px);margin:0 0 4px;letter-spacing:.2px}
+header p{margin:0;color:var(--ink-2)}
+.tag{display:inline-block;font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-bottom:6px}
+
+.stage{position:relative;margin-top:16px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--scene-bg)}
+#scene{display:block;width:100%;height:clamp(340px,58vh,620px);touch-action:none}
+.overlay{position:absolute;left:12px;top:12px;display:flex;flex-direction:column;gap:6px;pointer-events:none;max-width:calc(100% - 24px)}
+.chip{background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;width:fit-content}
+.chip b{font-weight:600}
+.verdict{font-weight:600}
+.verdict.good{color:var(--good)} .verdict.bad{color:var(--bad)} .verdict.warn{color:var(--warn)}
+.hint{position:absolute;right:12px;bottom:10px;font-size:12px;color:var(--ink-3);pointer-events:none}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:12px}
+.seg{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:transparent;color:var(--ink);padding:8px 14px;font:inherit;font-size:14px;cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 14px;border-radius:10px;font:inherit;font-size:14px;cursor:pointer}
+.btn:hover,.seg button:hover{filter:brightness(.97)}
+.recbox{display:flex;gap:6px;align-items:center}
+.recbox select{border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:8px 10px;border-radius:10px;font:inherit;font-size:14px}
+.rec-btn.on{background:var(--bad);color:#fff;border-color:var(--bad)}
+.stage.rec #scene{height:auto;aspect-ratio:16/9}
+.recnote{font-size:13px;color:var(--ink-3);margin-top:6px}
+.speed{display:flex;align-items:center;gap:8px;font-size:14px}
+.speed input{width:160px;accent-color:var(--accent)}
+.speed output{font-family:var(--mono);min-width:86px}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px}
+.kpi .k{font-size:13px;color:var(--ink-2)}
+.kpi .v{font-family:var(--mono);font-size:24px;font-weight:600;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--ink-3)}
+
+.row{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;margin-top:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.card h2{font-size:17px;margin:0 0 8px}
+.card h3{font-size:15px;margin:14px 0 4px}
+.card p{margin:6px 0;color:var(--ink-2)}
+#chart{display:block;width:100%;height:260px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;color:var(--ink-2);margin-top:6px}
+.legend i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin-right:5px}
+
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.step .n{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--ink-2);font-weight:600;font-size:13px}
+td code,p code{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+.ok{color:var(--good);font-weight:600} .no{color:var(--bad);font-weight:600} .mid{color:var(--warn);font-weight:600}
+.tablewrap{overflow-x:auto}
+
+@media (max-width:900px){
+  .row{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="tag">Motion Filling · CODESYS SoftMotion · CAM + Tappet</div>
+    <h1>ทำไมการเติมของเหลวตามขวดที่วิ่งต้องใช้ CAM</h1>
+    <p>สายพานขวด (Master) วิ่งตลอดเวลา หัวเติม (Slave) ต้องวิ่งตามปากขวดให้ทันระหว่างเติม แล้วรีบกลับมารอขวดถัดไป ลองสลับ 3 แบบด้านล่างแล้วเทียบผลลัพธ์</p>
+  </header>
+
+  <div class="stage">
+    <canvas id="scene" aria-label="ภาพจำลอง 3 มิติของเครื่องเติมของเหลว"></canvas>
+    <div class="overlay">
+      <div class="chip" id="modeChip"></div>
+      <div class="chip"><span id="verdict" class="verdict"></span></div>
+      <div class="chip" id="stateChip"></div>
+    </div>
+    <div class="hint">ลากเพื่อหมุน · scroll เพื่อซูม</div>
+  </div>
+
+  <div class="controls">
+    <div class="seg" role="group" aria-label="โหมด">
+      <button data-mode="cam" aria-pressed="true">① ใช้ CAM (เติมขณะวิ่ง)</button>
+      <button data-mode="fixed" aria-pressed="false">② ไม่ใช้ CAM (หัวเติมอยู่กับที่)</button>
+      <button data-mode="stopgo" aria-pressed="false">③ Stop &amp; Go (หยุดทีละขวด)</button>
+    </div>
+    <div class="speed">
+      <label for="spd">ความเร็วสายพาน</label>
+      <input id="spd" type="range" min="60" max="240" step="10" value="120">
+      <output id="spdOut">120 mm/s</output>
+    </div>
+    <button class="btn" id="play">⏸ หยุดชั่วคราว</button>
+    <div class="recbox">
+      <select id="recKind" aria-label="แบบการอัด">
+        <option value="all">อัดทั้ง 3 โหมด (10 วิ/โหมด)</option>
+        <option value="current">อัดเฉพาะโหมดนี้ (15 วิ)</option>
+      </select>
+      <button class="btn rec-btn" id="recBtn">🎥 อัดวิดีโอ HD 1080p</button>
+    </div>
+    <div class="seg" role="group" aria-label="มุมกล้อง">
+      <button data-view="overview" aria-pressed="true">ภาพรวม</button>
+      <button data-view="close" aria-pressed="false">ใกล้หัวเติม</button>
+      <button data-view="top" aria-pressed="false">มุมบน</button>
+    </div>
+  </div>
+
+  <div class="recnote" id="recNote">ปุ่ม 🎥 อัดจากภาพ 3D โดยตรงที่ 1920×1080 พร้อมชื่อโหมด ตัวเลข และกราฟ CAM ในวิดีโอ เสร็จแล้วไฟล์จะดาวน์โหลดเอง (อย่าสลับแท็บระหว่างอัด)</div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">กำลังผลิต</div><div class="v" id="kBpm">–</div><div class="s">ขวด / นาที</div></div>
+    <div class="kpi"><div class="k">เติมได้เฉลี่ย (5 ขวดล่าสุด)</div><div class="v" id="kFill">–</div><div class="s">ของปริมาตรขวด</div></div>
+    <div class="kpi"><div class="k">น้ำหกบนสายพาน</div><div class="v" id="kSpill">0 ml</div><div class="s">สะสมตั้งแต่เปลี่ยนโหมด</div></div>
+    <div class="kpi"><div class="k">ความเร็วสัมพัทธ์ หัวเติม − ปากขวด</div><div class="v" id="kRel">–</div><div class="s">ขณะวาล์วเปิด (ต้องเป็น 0)</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>CAM Profile: ตำแหน่งหัวเติมเทียบกับปากขวด</h2>
+      <canvas id="chart" aria-label="กราฟ CAM profile"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--nozzle)"></i>หัวเติม (Slave)</span>
+        <span><i style="background:var(--bottle)"></i>ปากขวด (Master − 15)</span>
+        <span><i style="background:var(--tappet1);opacity:.5"></i>T1 วาล์วเปิด 45–195</span>
+        <span><i style="background:var(--tappet2);opacity:.5"></i>T2 หัวเติมลง 35–205</span>
+      </div>
+      <p id="chartNote"></p>
+    </div>
+    <div class="card">
+      <h2>อ่านกราฟยังไง</h2>
+      <p>แกนนอนคือตำแหน่ง Master ภายใน 1 pitch (0–360 mm = ขวด 1 ใบ) แกนตั้งคือตำแหน่งในแนวราบ (mm)</p>
+      <p><b>เส้นหัวเติมทับเส้นปากขวด</b> หมายถึงหัวเติมวิ่งไปพร้อมขวดด้วยความเร็วเท่ากัน ความเร็วสัมพัทธ์จึงเป็น 0 และน้ำลงขวดพอดี</p>
+      <p>ช่วง 210–360 หัวเติมวิ่ง<b>ย้อนกลับ</b>ด้วยโค้ง 5th-order polynomial (ไม่กระชาก) เพื่อไปรอขวดใบถัดไป แล้ววนซ้ำทุก 360 mm (Periodic)</p>
+      <p>Tappet อิงกับ<b>ตำแหน่ง Master</b> ไม่ใช่เวลา ปรับความเร็วสายพานแค่ไหนวาล์วก็ยังเปิด–ปิดตรงปากขวดเสมอ ลองเลื่อน slider ดูได้</p>
+    </div>
+  </div>
+
+  <div class="steps">
+    <div class="card step">
+      <div class="n">ปัญหา</div>
+      <h3>หัวเติมอยู่กับที่ แต่ขวดไม่หยุด</h3>
+      <p>ปากขวดกว้างแค่ ~30 mm ที่ 120 mm/s ปากขวดจะผ่านใต้หัวเติมแค่ประมาณ 0.25 วินาที แต่ต้องใช้เวลาเติม 1.25 วินาที น้ำส่วนใหญ่จึงหกลงสายพาน</p>
+    </div>
+    <div class="card step">
+      <div class="n">ทางเลี่ยง</div>
+      <h3>Stop &amp; Go: หยุดสายพานทุกขวด</h3>
+      <p>เติมได้เต็มก็จริง แต่ต้องเร่ง/หยุดช้าๆ เพราะขวดเปิดฝาและมีน้ำ (น้ำกระฉอก) สายพานต้นทางต้องหยุดตามด้วย และกำลังผลิตลดลง</p>
+    </div>
+    <div class="card step">
+      <div class="n">คำตอบ</div>
+      <h3>CAM: Master–Slave + Tappet</h3>
+      <p>สายพานวิ่งต่อเนื่อง หัวเติม sync 1:1 ตามขวดช่วง 30–210 วาล์วเปิดด้วย Tappet เฉพาะช่วงที่ตรงปากขวด แล้วกลับมารอขวดถัดไปใน profile เดียวกัน</p>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>เทียบ 3 แบบ</h2>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>① CAM</th><th>② หัวเติมอยู่กับที่</th><th>③ Stop &amp; Go</th></tr></thead>
+      <tbody>
+        <tr><td>สายพาน</td><td class="ok">วิ่งต่อเนื่อง</td><td class="ok">วิ่งต่อเนื่อง</td><td class="mid">หยุด–เดิน ทุกขวด</td></tr>
+        <tr><td>เติมเต็มขวด</td><td class="ok">เต็ม 100%</td><td class="no">ได้นิดเดียว น้ำหก</td><td class="ok">เต็ม 100%</td></tr>
+        <tr><td>กำลังผลิต (120 mm/s)</td><td class="ok">20 ขวด/นาที</td><td class="no">20 ขวด/นาที แต่ขวดไม่เต็ม</td><td class="mid">≈15 ขวด/นาที</td></tr>
+        <tr><td>แรงกระชาก/น้ำกระฉอก</td><td class="ok">ต่ำ (poly5)</td><td class="ok">ต่ำ</td><td class="no">สูง: ต้องจำกัดความเร่ง</td></tr>
+        <tr><td>ทำไมไม่ใช้ GearIn แทน</td><td colspan="3">GearIn ทำได้แค่ “ตามด้วยอัตราคงที่” แต่ย้อนกลับไม่ได้ ต้องสลับ GearIn ↔ MoveAbsolute แล้ว sync ใหม่ทุกขวด CAM รวมทั้งการตาม การชะลอ และการกลับไว้ใน profile periodic เดียว</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h2>ตรงกับโปรเจกต์ CODESYS “Motion Filling”</h2>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th>ในภาพ 3D</th><th>ใน CODESYS</th><th>ทำงานยังไง</th></tr></thead>
+      <tbody>
+        <tr><td>สายพานขวด</td><td><code>Axis_Conveyor</code> (Master, modulo 360)</td><td><code>MC_MoveVelocity</code> ที่ <code>GVL_Filling.rConveyorSpeed</code></td></tr>
+        <tr><td>หัวเติมแนวราบ</td><td><code>Axis_Filler</code> (Slave)</td><td><code>MC_CamTableSelect</code> + <code>MC_CamIn</code> กับ <code>CAM_Filling</code> (Periodic)</td></tr>
+        <tr><td>วาล์วเติม / หัวเติมลง</td><td>Tappet track 1 / track 2</td><td><code>SMC_GetTappetValue</code> → <code>xValveOpen</code> (45–195), <code>xNozzleDown</code> (35–205)</td></tr>
+        <tr><td>เกลียวป้อนขวด</td><td><code>Axis_Rotary</code></td><td><code>MC_GearIn</code> 1:1 หมุน 1 รอบต่อ 1 ขวด ทำให้ระยะห่างขวดตรงกับ pitch เสมอ</td></tr>
+        <tr><td>ถังพัก + ปั๊ม</td><td><code>PRG_Process</code></td><td>M1 Pump 40%/90%, M2 Mixer, M3 Capper, M4 Exit conveyor</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+'use strict';
+// ------------------------------------------------------------------ constants (mm)
+const P = 360;            // bottle pitch = master period
+const X0 = -150;          // filler home position (world mm)
+const OFF = 15;           // bottle mouth = master - 15 (cam accel lag)
+const MOUTH = 15;         // mouth radius
+const XF = X0 + 105;      // fixed nozzle position (no-cam mode)
+const SG_ACC = 300;       // stop&go accel limit (slosh) mm/s^2
+const S = 0.01;           // mm -> scene units
+const BOTTLE_ML = 500;
+
+function cam(p){
+  let u;
+  if (p < 30){ u = p/30; return 30*u*u*u - 15*u*u*u*u; }
+  if (p < 210) return 15 + (p-30);
+  if (p < 240){ u = (p-210)/30; return 195 + 30*u - 30*u*u*u + 15*u*u*u*u; }
+  u = (p-240)/120; const u3=u*u*u; return 210 - 2100*u3 + 3150*u3*u - 1260*u3*u*u;
+}
+
+// ------------------------------------------------------------------ state
+const st = {
+  mode:'cam', v:120, M:0, mv:120, playing:true,
+  sg:{state:'fill', t:0, startM:0},
+  fills:new Map(), recorded:new Set(), lastFills:[], spill:0,
+  nozzleX:X0, prevNozzleX:X0, rel:0, valve:false, down:false, downAnim:0,
+  puddleTimer:0, onMouth:false
+};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ------------------------------------------------------------------ three.js scene
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 2, 0.1, 200);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI*0.495;
+controls.minDistance = 2.5; controls.maxDistance = 40;
+
+const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f88, 0.75); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(6,14,8); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-16,right:16,top:10,bottom:-10,near:1,far:40});
+scene.add(sun);
+
+const M_ = (c,o={}) => new THREE.MeshStandardMaterial(Object.assign({color:c, roughness:.6, metalness:.1},o));
+const steel = M_(0xb7bcc0,{metalness:.6,roughness:.35});
+const darkSteel = M_(0x51575c,{metalness:.5,roughness:.45});
+const motorMat = M_(0x2f6f9f,{metalness:.3,roughness:.5});
+const nozzleMat = M_(0x0f7b6c,{metalness:.3,roughness:.4});
+function box(w,h,d,mat,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;scene.add(m);return m;}
+function cyl(r,h,mat,x,y,z,seg=24){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,seg),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;scene.add(m);return m;}
+
+// floor
+const floorMat = M_(0xd9ddd4,{roughness:1,metalness:0});
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(80,40), floorMat);
+floor.rotation.x = -Math.PI/2; floor.position.y = -1.2; floor.receiveShadow = true; scene.add(floor);
+
+// conveyor
+const CL = 30; // length (units)
+box(CL,0.18,1.3,darkSteel,0,-0.12,0);
+const beltTexCanvas = document.createElement('canvas'); beltTexCanvas.width=512; beltTexCanvas.height=64;
+(function(){const g=beltTexCanvas.getContext('2d');g.fillStyle='#2b2f31';g.fillRect(0,0,512,64);g.fillStyle='#3a3f42';for(let i=0;i<16;i++){g.fillRect(i*32,0,10,64);}})();
+const beltTex = new THREE.CanvasTexture(beltTexCanvas);
+beltTex.wrapS = beltTex.wrapT = THREE.RepeatWrapping; beltTex.repeat.set(CL/3.2*1,1);
+beltTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const belt = new THREE.Mesh(new THREE.BoxGeometry(CL,0.04,1.1), M_(0xffffff,{map:beltTex,roughness:.9,metalness:0}));
+belt.position.y = -0.02; belt.receiveShadow = true; scene.add(belt);
+box(CL,0.12,0.04,steel,0,0.35,0.48); box(CL,0.12,0.04,steel,0,0.35,-0.48);
+for (let x=-14; x<=14; x+=4){ box(0.12,1.1,0.12,darkSteel,x,-0.75,0.55); box(0.12,1.1,0.12,darkSteel,x,-0.75,-0.55); }
+const rollers=[];
+[-CL/2, CL/2].forEach(x=>{const r=cyl(0.14,1.2,steel,x,-0.1,0);r.rotation.x=Math.PI/2;rollers.push(r);});
+// conveyor drive motor
+const convMotor = cyl(0.28,0.7,motorMat,CL/2,-0.1,1.05); convMotor.rotation.x=Math.PI/2;
+box(0.5,0.5,0.25,motorMat,CL/2,-0.1,1.45);
+
+// fill-window marker on belt
+const winMat = new THREE.MeshBasicMaterial({color:0x1f7fd1, transparent:true, opacity:.14, depthWrite:false});
+const winMesh = new THREE.Mesh(new THREE.PlaneGeometry(1,1.1), winMat);
+winMesh.rotation.x = -Math.PI/2; winMesh.position.y = 0.012; scene.add(winMesh);
+
+// ---- filler gantry
+const RAIL_Y = 4.2, RAIL_Z = -0.95;
+box(0.16,5.5,0.16,steel,-4.6,1.55,RAIL_Z); box(0.16,5.5,0.16,steel,2.6,1.55,RAIL_Z);
+box(7.6,0.22,0.22,steel,-1.0,RAIL_Y,RAIL_Z);
+const fillerMotor = cyl(0.26,0.6,motorMat,-5.1,RAIL_Y,RAIL_Z); fillerMotor.rotation.z = Math.PI/2;
+const carriage = new THREE.Group(); scene.add(carriage);
+(function(){
+  const c1 = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.4,0.45), M_(0x0f7b6c,{metalness:.3,roughness:.4})); c1.position.set(0,RAIL_Y,RAIL_Z+0.05); c1.castShadow=true; carriage.add(c1);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,1.0), steel); arm.position.set(0,RAIL_Y-0.1,RAIL_Z+0.5); arm.castShadow=true; carriage.add(arm);
+})();
+const nozzleGroup = new THREE.Group(); carriage.add(nozzleGroup);
+(function(){
+  const cylr = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,0.7,16), M_(0x9aa1a6,{metalness:.6,roughness:.3})); cylr.position.set(0,RAIL_Y-0.45,0); carriage.add(cylr);
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.6,20), nozzleMat); body.position.set(0,3.25,0); body.castShadow=true; nozzleGroup.add(body);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.03,0.6,16), steel); tip.position.set(0,2.65,0); tip.castShadow=true; nozzleGroup.add(tip);
+  const valve = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.18,0.26), M_(0x444a4f)); valve.position.set(0,3.6,0); nozzleGroup.add(valve);
+})();
+const valveLamp = new THREE.Mesh(new THREE.SphereGeometry(0.07,16,12), new THREE.MeshBasicMaterial({color:0x334}));
+valveLamp.position.set(0.16,3.62,0.12); nozzleGroup.add(valveLamp);
+const NOZZLE_TIP_UP = 2.35; const DOWN_TRAVEL = 0.32;
+
+// stream
+const streamMat = new THREE.MeshStandardMaterial({color:0x1f7fd1, transparent:true, opacity:.85, roughness:.2});
+const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,1,10), streamMat);
+scene.add(stream);
+
+// tank + hose
+const TANK = new THREE.Vector3(-1.0,6.4,-2.2);
+const tankGlass = new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,1.6,32), new THREE.MeshStandardMaterial({color:0xdde6ea,transparent:true,opacity:.28,roughness:.1}));
+tankGlass.position.copy(TANK); scene.add(tankGlass);
+const tankLiquid = new THREE.Mesh(new THREE.CylinderGeometry(0.86,0.86,1,32), new THREE.MeshStandardMaterial({color:0x1f7fd1,transparent:true,opacity:.65}));
+scene.add(tankLiquid);
+(function(){ const top = TANK.y-0.8, bot = -1.2, h = top-bot; box(0.1,h,0.1,steel,TANK.x-0.7,bot+h/2,TANK.z); box(0.1,h,0.1,steel,TANK.x+0.7,bot+h/2,TANK.z); })();
+const mixer = new THREE.Group(); scene.add(mixer); mixer.position.set(TANK.x,TANK.y,TANK.z);
+(function(){const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.6,8),steel);mixer.add(sh);const b=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.05,0.12),steel);b.position.y=-0.55;mixer.add(b);const m=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.35,16),motorMat);m.position.y=0.98;mixer.add(m);})();
+let hose = null; const hoseMat = M_(0x2a2f33,{roughness:.8});
+function updateHose(nx){
+  const a = new THREE.Vector3(TANK.x, TANK.y-0.8, TANK.z);
+  const b = new THREE.Vector3(nx, 3.75, 0.05);
+  const mid = new THREE.Vector3((a.x+b.x)/2, 4.9, (a.z+b.z)/2 - 0.2);
+  const curve = new THREE.CatmullRomCurve3([a, new THREE.Vector3(a.x,a.y-0.5,a.z), mid, new THREE.Vector3(b.x,b.y+0.7,b.z), b]);
+  const g = new THREE.TubeGeometry(curve, 40, 0.045, 8, false);
+  if (hose){ hose.geometry.dispose(); hose.geometry = g; }
+  else { hose = new THREE.Mesh(g, hoseMat); hose.castShadow = true; scene.add(hose); }
+}
+
+// timing screw (rotary axis)
+const SCREW_X0 = -11.2, SCREW_LEN = 5.4, SCREW_Z = 0.62, SCREW_Y = 0.55;
+const screw = new THREE.Group(); screw.position.set(SCREW_X0, SCREW_Y, SCREW_Z); scene.add(screw);
+(function(){
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,SCREW_LEN,20), M_(0xe8e2d0,{roughness:.5}));
+  core.rotation.z = Math.PI/2; core.position.x = SCREW_LEN/2; core.castShadow=true; screw.add(core);
+  class Helix extends THREE.Curve{ getPoint(t){ const ang = t*(SCREW_LEN/(P*S))*Math.PI*2; return new THREE.Vector3(t*SCREW_LEN, Math.cos(ang)*0.2, Math.sin(ang)*0.2); } }
+  const h = new THREE.Mesh(new THREE.TubeGeometry(new Helix(), 200, 0.07, 10, false), M_(0xd9a441,{roughness:.45}));
+  h.castShadow = true; screw.add(h);
+})();
+const screwMotor = cyl(0.22,0.5,motorMat,SCREW_X0-0.35,SCREW_Y,SCREW_Z); screwMotor.rotation.z = Math.PI/2;
+box(0.12,1.3,0.12,darkSteel,SCREW_X0-0.35,-0.4,SCREW_Z+0.05);
+
+// bottles
+const glassMat = new THREE.MeshStandardMaterial({color:0xe8f1f5,transparent:true,opacity:.32,roughness:.08,metalness:0,depthWrite:false});
+const liquidMat = new THREE.MeshStandardMaterial({color:0x1f7fd1,transparent:true,opacity:.85,roughness:.25});
+const B_R = 0.32, B_H = 1.45, LIQ_H = 1.4;
+function makeBottle(){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(B_R,B_R,B_H,28,1,true), glassMat); body.position.y = B_H/2; g.add(body);
+  const bottom = new THREE.Mesh(new THREE.CircleGeometry(B_R,28), glassMat); bottom.rotation.x=-Math.PI/2; bottom.position.y=0.01; g.add(bottom);
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.15,B_R,0.3,28,1,true), glassMat); sh.position.y = B_H+0.15; g.add(sh);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.28,24,1,true), glassMat); neck.position.y = B_H+0.44; g.add(neck);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.155,0.02,8,24), M_(0xc2410c)); ring.rotation.x=Math.PI/2; ring.position.y = B_H+0.58; g.add(ring);
+  const liqGeo = new THREE.CylinderGeometry(B_R-0.025,B_R-0.025,1,28); liqGeo.translate(0,0.5,0);
+  const liq = new THREE.Mesh(liqGeo, liquidMat); liq.position.y = 0.02; liq.castShadow=false; g.add(liq);
+  const shadow = new THREE.Mesh(new THREE.CylinderGeometry(B_R,B_R,B_H,16), new THREE.MeshBasicMaterial({colorWrite:false, depthWrite:false})); shadow.position.y=B_H/2; shadow.castShadow=true; g.add(shadow);
+  g.userData.liq = liq; scene.add(g); return g;
+}
+const POOL = 11; const pool = []; for (let i=0;i<POOL;i++) pool.push(makeBottle());
+const MOUTH_Y = B_H + 0.58;
+
+// puddles
+const puddles = [];
+const puddleGeo = new THREE.CircleGeometry(1,20);
+function addPuddle(xmm){
+  const m = new THREE.Mesh(puddleGeo, new THREE.MeshStandardMaterial({color:0x1f7fd1,transparent:true,opacity:.55,roughness:.1,depthWrite:false}));
+  m.rotation.x = -Math.PI/2; m.position.y = 0.006 + Math.random()*0.003;
+  const r = 0.08 + Math.random()*0.1; m.scale.set(r,r,r);
+  m.userData = {beltPos: xmm - st.M, z:(Math.random()-0.5)*0.35, life:1};
+  scene.add(m); puddles.push(m);
+}
+function clearPuddles(){ puddles.splice(0).forEach(p=>{scene.remove(p);p.material.dispose();}); }
+
+// labels
+function label(text, sub, color){
+  const c = document.createElement('canvas'); c.width=1440; c.height=320; const g=c.getContext('2d'); g.scale(2,2);
+  g.fillStyle='rgba(255,255,255,0.92)'; roundRect(g,4,4,712,152,26); g.fill();
+  g.fillStyle=color; g.fillRect(4,30,14,100);
+  g.fillStyle='#1d2321'; g.font='600 52px "Noto Sans Thai", sans-serif'; g.fillText(text,40,72);
+  g.fillStyle='#4f5753'; g.font='400 38px "Noto Sans Thai", sans-serif'; g.fillText(sub,40,128);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = renderer.capabilities.getMaxAnisotropy(); t.minFilter = THREE.LinearMipmapLinearFilter;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map:t, depthTest:false}));
+  s.scale.set(3.0,0.667,1); s.renderOrder = 10; scene.add(s); return s;
+}
+function roundRect(g,x,y,w,h,r){g.beginPath();g.moveTo(x+r,y);g.arcTo(x+w,y,x+w,y+h,r);g.arcTo(x+w,y+h,x,y+h,r);g.arcTo(x,y+h,x,y,r);g.arcTo(x,y,x+w,y,r);g.closePath();}
+let lblMaster, lblSlave, lblRot, lblTank;
+function makeLabels(){
+  [lblMaster,lblSlave,lblRot,lblTank].forEach(l=>{ if(l){scene.remove(l);l.material.map.dispose();l.material.dispose();} });
+  lblMaster = label('MASTER · Axis_Conveyor','สายพานขวด วิ่งต่อเนื่อง','#c2410c'); lblMaster.position.set(9.5,1.6,0.9);
+  lblSlave  = label('SLAVE · Axis_Filler','หัวเติมแนวราบ (MC_CamIn)','#0f7b6c'); lblSlave.position.set(-1,5.2,-0.9);
+  lblRot    = label('ROTARY · Axis_Rotary','เกลียวป้อนขวด GearIn 1:1','#d9a441'); lblRot.position.set(-9,1.9,1.1);
+  lblTank   = label('ถังพัก + Mixer (M2)','จ่ายน้ำผ่านสายยางไปหัวเติม','#1f7fd1'); lblTank.position.set(TANK.x+2.6,TANK.y+0.6,TANK.z);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(makeLabels); makeLabels();
+
+// ------------------------------------------------------------------ views
+const views = {
+  overview:{pos:[4,9.5,16], tgt:[-2,2.6,0]},
+  close:{pos:[1.4,3.4,6.4], tgt:[-0.6,2.1,0]},
+  top:{pos:[-1.5,16,0.6], tgt:[-1.5,0,0]}
+};
+let viewAnim = null;
+function setView(name, instant){
+  const v = views[name];
+  const from = {p:camera.position.clone(), t:controls.target.clone()};
+  const to = {p:new THREE.Vector3(...v.pos), t:new THREE.Vector3(...v.tgt)};
+  if (instant){ camera.position.copy(to.p); controls.target.copy(to.t); controls.update(); return; }
+  viewAnim = {from, to, t:0};
+  document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.view===name));
+}
+setView('overview', true);
+
+// ------------------------------------------------------------------ simulation
+function sgProfile(){
+  const D = P, a = SG_ACC; let vmax = Math.min(2*st.v, Math.sqrt(a*D));
+  const ta = vmax/a, da = vmax*vmax/(2*a);
+  const T = 2*ta + Math.max(0,(D-2*da))/vmax;
+  return {vmax, ta, da, T, a, D};
+}
+function sgPos(t, pr){
+  if (t <= pr.ta) return 0.5*pr.a*t*t;
+  if (t <= pr.T-pr.ta) return pr.da + pr.vmax*(t-pr.ta);
+  const r = Math.max(0, pr.T - t); return pr.D - 0.5*pr.a*r*r;
+}
+const Tf = () => 150/st.v;           // fill time = CAM fill window at current speed
+const SG_PAD = 0.2;
+
+function bottleX(i){ return X0 + (st.M - i*P) - OFF; }
+
+function step(dt){
+  // ---- master
+  if (st.mode !== 'stopgo'){ st.mv = st.v; st.M += st.v*dt; }
+  else {
+    const sg = st.sg; sg.t += dt;
+    if (sg.state === 'fill'){
+      st.mv = 0;
+      if (sg.t >= Tf() + 2*SG_PAD){ sg.state='move'; sg.t=0; sg.startM = st.M; }
+    } else {
+      const pr = sgProfile();
+      const prevM = st.M;
+      if (sg.t >= pr.T){ st.M = sg.startM + P; sg.state='fill'; sg.t=0; }
+      else st.M = sg.startM + sgPos(sg.t, pr);
+      st.mv = (st.M - prevM)/Math.max(dt,1e-6);
+    }
+  }
+  const p = ((st.M % P) + P) % P;
+
+  // ---- slave + tappets
+  st.prevNozzleX = st.nozzleX;
+  if (st.mode === 'cam'){ st.nozzleX = X0 + cam(p); st.valve = p>=45 && p<=195; st.down = p>=35 && p<=205; }
+  else if (st.mode === 'fixed'){ st.nozzleX = XF; st.valve = p>=45 && p<=195; st.down = p>=35 && p<=205; }
+  else { st.nozzleX = X0 - OFF; const f = st.sg.state==='fill'; st.down = f; st.valve = f && st.sg.t>=SG_PAD && st.sg.t<=SG_PAD+Tf(); }
+  const nozzleV = (st.nozzleX - st.prevNozzleX)/Math.max(dt,1e-6);
+  st.downAnim += ((st.down?1:0) - st.downAnim)*Math.min(1, dt*12);
+
+  // ---- bottle under nozzle
+  const iNear = Math.round((X0 - OFF + st.M - st.nozzleX)/P);
+  const d = st.nozzleX - bottleX(iNear);
+  st.onMouth = Math.abs(d) < MOUTH;
+  const rawRel = nozzleV - st.mv;
+  st.rel += (rawRel - st.rel)*Math.min(1, dt*8);
+
+  if (st.valve){
+    const q = 100/Tf()*dt; // % of bottle per frame
+    if (st.onMouth && st.downAnim > 0.5){
+      const f = (st.fills.get(iNear)||0) + q;
+      if (f > 100){ st.spill += (f-100)/100*BOTTLE_ML; st.fills.set(iNear,100); } else st.fills.set(iNear,f);
+    } else {
+      st.spill += q/100*BOTTLE_ML;
+      st.puddleTimer -= dt;
+      if (st.puddleTimer <= 0){ addPuddle(st.nozzleX); st.puddleTimer = 0.06; }
+    }
+  }
+
+  // ---- record bottles leaving the filling zone
+  const iDone = Math.floor((X0 - OFF + st.M - (X0+450))/P);
+  if (iDone > -1e9 && !st.recorded.has(iDone) && bottleX(iDone) > X0+450 && st.fills.has(iDone)){
+    st.recorded.add(iDone); st.lastFills.push(st.fills.get(iDone)); if (st.lastFills.length>5) st.lastFills.shift();
+  }
+  // forget far-away bottles
+  if (st.fills.size > 40){ for (const k of st.fills.keys()){ if (bottleX(k) > 2500) st.fills.delete(k); } }
+  if (st.recorded.size > 60){ for (const k of st.recorded){ if (bottleX(k) > 2500) st.recorded.delete(k); } }
+}
+
+// ------------------------------------------------------------------ render sync
+function syncScene(dt){
+  const p = ((st.M % P) + P) % P;
+  // belt texture & rollers
+  beltTex.offset.x = -(st.M*S)/3.2;   // one stripe tile = 3.2 units
+  rollers.forEach(r=>r.rotation.y = -st.M*S/0.14);
+  // bottles
+  const xmin = -1500, xmax = 1500;
+  const iMax = Math.floor((X0 - OFF + st.M - xmin)/P), iMin = Math.ceil((X0 - OFF + st.M - xmax)/P);
+  pool.forEach(b=>b.visible=false);
+  for (let i=iMin;i<=iMax;i++){
+    const b = pool[((i%POOL)+POOL)%POOL];
+    const x = bottleX(i);
+    b.visible = true; b.position.set(x*S, 0, 0);
+    const f = Math.min(100, st.fills.get(i)||0);
+    const liq = b.userData.liq; liq.visible = f>0.5; liq.scale.y = Math.max(0.001, f/100*LIQ_H);
+  }
+  // carriage & nozzle
+  carriage.position.x = st.nozzleX*S;
+  nozzleGroup.position.y = -DOWN_TRAVEL*st.downAnim;
+  valveLamp.material.color.set(st.valve ? 0x37a2ff : 0x2a2f36);
+  updateHose(st.nozzleX*S);
+  // stream
+  if (st.valve){
+    const tipY = NOZZLE_TIP_UP - DOWN_TRAVEL*st.downAnim;
+    let bottomY = 0.01;
+    if (st.onMouth && st.downAnim>0.5){
+      const iNear = Math.round((X0 - OFF + st.M - st.nozzleX)/P);
+      bottomY = 0.02 + Math.min(100, st.fills.get(iNear)||0)/100*LIQ_H;
+    }
+    const h = Math.max(0.02, tipY - bottomY);
+    stream.visible = true; stream.scale.set(1,h,1); stream.position.set(st.nozzleX*S, bottomY + h/2, 0);
+  } else stream.visible = false;
+  // puddles move with belt and fade
+  for (let k=puddles.length-1;k>=0;k--){
+    const m = puddles[k]; m.userData.life -= dt*0.12;
+    const x = (m.userData.beltPos + st.M)*S;
+    m.position.x = x; m.position.z = m.userData.z;
+    m.material.opacity = Math.max(0, .55*m.userData.life);
+    if (m.userData.life <= 0 || x > CL/2){ scene.remove(m); m.material.dispose(); puddles.splice(k,1); }
+  }
+  // fill window marker
+  if (st.mode === 'cam'){ const a=(X0+15)*S, b=(X0+195)*S; winMesh.visible=true; winMesh.scale.x=b-a; winMesh.position.x=(a+b)/2; }
+  else if (st.mode === 'fixed'){ winMesh.visible=true; winMesh.scale.x=2*MOUTH*S; winMesh.position.x=XF*S; }
+  else { winMesh.visible=true; winMesh.scale.x=2*MOUTH*S; winMesh.position.x=(X0-OFF)*S; }
+  // rotary timing screw: 1 rev per pitch (GearIn 1:1)
+  screw.rotation.x = -(st.M/P)*Math.PI*2;
+  screwMotor.rotation.x = screw.rotation.x;
+  // tank & mixer
+  const lvl = 0.55 + 0.25*Math.sin(st.M/2000);
+  tankLiquid.scale.y = 1.5*lvl; tankLiquid.position.set(TANK.x, TANK.y-0.78+0.75*lvl, TANK.z);
+  mixer.rotation.y += dt*3;
+}
+
+// ------------------------------------------------------------------ chart
+const chart = document.getElementById('chart'); const cg = chart.getContext('2d');
+function drawChart(){
+  const dpr = Math.min(window.devicePixelRatio,2);
+  const W = chart.clientWidth, H = chart.clientHeight;
+  if (chart.width !== Math.round(W*dpr) || chart.height !== Math.round(H*dpr)){ chart.width=Math.round(W*dpr); chart.height=Math.round(H*dpr); }
+  cg.setTransform(dpr,0,0,dpr,0,0); cg.clearRect(0,0,W,H);
+  const L=44,R=12,T=10,B=28; const pw=W-L-R, ph=H-T-B;
+  const ymin=-40, ymax=250;
+  const X = m => L + m/360*pw, Y = s => T + (1-(s-ymin)/(ymax-ymin))*ph;
+  const ink3=css('--ink-3'), line=css('--line');
+  // tappet bands
+  if (st.mode!=='stopgo'){
+    cg.fillStyle = css('--tappet2'); cg.globalAlpha=.13; cg.fillRect(X(35),T,X(205)-X(35),ph);
+    cg.fillStyle = css('--tappet1'); cg.globalAlpha=.16; cg.fillRect(X(45),T,X(195)-X(45),ph); cg.globalAlpha=1;
+  }
+  // grid
+  cg.strokeStyle=line; cg.lineWidth=1; cg.fillStyle=ink3; cg.font='11px "IBM Plex Mono", monospace';
+  for (let m=0;m<=360;m+=60){ cg.beginPath(); cg.moveTo(X(m),T); cg.lineTo(X(m),T+ph); cg.stroke(); cg.textAlign='center'; cg.fillText(m, X(m), H-10); }
+  for (let s=0;s<=240;s+=60){ cg.beginPath(); cg.moveTo(L,Y(s)); cg.lineTo(L+pw,Y(s)); cg.stroke(); cg.textAlign='right'; cg.fillText(s, L-6, Y(s)+4); }
+  cg.textAlign='left'; cg.fillText('Master (mm ใน 1 pitch) →', L+4, T+12);
+  // clip
+  cg.save(); cg.beginPath(); cg.rect(L,T,pw,ph); cg.clip();
+  // bottle mouth line(s), relative to X0
+  cg.strokeStyle=css('--bottle'); cg.lineWidth=2; cg.setLineDash([6,4]);
+  [0,-P].forEach(o=>{ cg.beginPath(); cg.moveTo(X(0),Y(0-OFF+o)); cg.lineTo(X(360),Y(360-OFF+o)); cg.stroke(); });
+  cg.setLineDash([]);
+  // nozzle
+  cg.strokeStyle=css('--nozzle'); cg.lineWidth=3; cg.beginPath();
+  for (let m=0;m<=360;m+=2){ let s; if (st.mode==='cam') s=cam(m%360); else if (st.mode==='fixed') s=XF-X0; else s=-OFF; m===0?cg.moveTo(X(m),Y(s)):cg.lineTo(X(m),Y(s)); }
+  cg.stroke();
+  // cursor
+  const p = ((st.M % P) + P) % P;
+  cg.strokeStyle=ink3; cg.lineWidth=1; cg.beginPath(); cg.moveTo(X(p),T); cg.lineTo(X(p),T+ph); cg.stroke();
+  const sN = st.nozzleX - X0, sB = p - OFF;
+  cg.fillStyle=css('--bottle'); cg.beginPath(); cg.arc(X(p),Y(sB),5,0,Math.PI*2); cg.fill();
+  cg.fillStyle=css('--nozzle'); cg.beginPath(); cg.arc(X(p),Y(sN),5,0,Math.PI*2); cg.fill();
+  cg.restore();
+}
+
+// ------------------------------------------------------------------ UI
+const $ = id => document.getElementById(id);
+const modeText = {
+  cam:'โหมด ① <b>ใช้ CAM</b>: หัวเติมวิ่งตามขวด แล้วกลับมารอขวดถัดไป',
+  fixed:'โหมด ② <b>ไม่ใช้ CAM</b>: หัวเติมอยู่กับที่ แต่ขวดวิ่งผ่าน',
+  stopgo:'โหมด ③ <b>Stop &amp; Go</b>: หยุดสายพานทุกขวดเพื่อเติม'
+};
+const chartNotes = {
+  cam:'ช่วง 30–210 เส้นหัวเติมทับเส้นปากขวด (sync 1:1) วาล์ว T1 เปิดอยู่ในช่วงนี้พอดี จากนั้นหัวเติมย้อนกลับไปที่ 0',
+  fixed:'เส้นหัวเติมเป็นเส้นตรง ตัดกับเส้นปากขวดแค่จุดเดียว (≈ Master 120) ช่วงที่เหลือของ T1 น้ำจึงลงสายพาน',
+  stopgo:'หัวเติมอยู่กับที่ที่ −15 สายพานหยุดที่ Master 0 ระหว่างเติม แล้วค่อยเดินต่อด้วยความเร่งต่ำเพื่อไม่ให้น้ำกระฉอก'
+};
+function bpm(){
+  if (st.mode==='stopgo'){ const pr=sgProfile(); return 60/(pr.T + Tf() + 2*SG_PAD); }
+  return 60*st.v/P;
+}
+function kpiValues(){
+  const avg = st.lastFills.length ? (st.lastFills.reduce((a,b)=>a+b,0)/st.lastFills.length).toFixed(0)+'%' : '–';
+  let rel = '– (ปิด)', relOk = null;
+  if (st.valve){ const val = Math.abs(st.rel)<5?0:st.rel; rel = val.toFixed(0)+' mm/s'; relOk = val===0; }
+  return {bpm:bpm().toFixed(1), avg, spill:Math.round(st.spill).toLocaleString()+' ml', rel, relOk};
+}
+function updateUI(){
+  $('modeChip').innerHTML = modeText[st.mode];
+  const v = $('verdict');
+  if (st.mode==='cam'){ v.className='verdict good'; v.textContent='✓ เติมเต็มทุกขวด สายพานไม่ต้องหยุด'; }
+  else if (st.mode==='fixed'){ v.className='verdict bad'; v.textContent='✗ ปากขวดผ่านเร็วเกินไป น้ำหกเกือบทั้งหมด'; }
+  else { v.className='verdict warn'; v.textContent='△ เติมเต็ม แต่ต้องหยุดทุกขวด กำลังผลิตลดลง'; }
+  const p = ((st.M % P)+P)%P;
+  $('stateChip').innerHTML = `Master <b>${p.toFixed(0)}</b> · Slave <b>${(st.nozzleX-X0).toFixed(0)}</b> mm · วาล์ว <b style="color:${st.valve?'var(--water)':'inherit'}">${st.valve?'เปิด':'ปิด'}</b>${st.mode==='stopgo'?` · สายพาน <b>${st.sg.state==='fill'?'หยุด':'เดิน'}</b>`:''}`;
+  $('kBpm').textContent = bpm().toFixed(1);
+  $('kFill').textContent = st.lastFills.length ? (st.lastFills.reduce((a,b)=>a+b,0)/st.lastFills.length).toFixed(0)+'%' : '–';
+  $('kSpill').textContent = Math.round(st.spill).toLocaleString()+' ml';
+  const r = $('kRel');
+  if (st.valve){ const val = Math.abs(st.rel)<5?0:st.rel; r.textContent = val.toFixed(0)+' mm/s'; r.style.color = val===0?'var(--good)':'var(--bad)'; }
+  else { r.textContent = '– (ปิด)'; r.style.color = 'var(--ink-3)'; }
+  $('chartNote').textContent = chartNotes[st.mode];
+}
+function setMode(m){
+  st.mode = m; st.spill = 0; st.lastFills = []; st.recorded.clear(); st.fills.clear(); clearPuddles();
+  if (m==='stopgo'){ st.M = Math.ceil(st.M/P)*P; st.sg = {state:'fill', t:0, startM:st.M}; }
+  document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed', b.dataset.mode===m));
+}
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+$('spd').addEventListener('input', e=>{ st.v = +e.target.value; $('spdOut').textContent = st.v+' mm/s'; });
+$('play').addEventListener('click', ()=>{ st.playing=!st.playing; $('play').textContent = st.playing?'⏸ หยุดชั่วคราว':'▶ เล่นต่อ'; });
+
+// theme-dependent scene colors
+function applyTheme(){
+  scene.background = new THREE.Color(css('--scene-bg'));
+  floorMat.color.set(css('--floor'));
+}
+applyTheme();
+if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+
+// ------------------------------------------------------------------ HD recorder (1920x1080, HUD burned in)
+const REC_W = 1920, REC_H = 1080;
+const verdictText = {
+  cam:['✓ เติมเต็มทุกขวด สายพานไม่ต้องหยุด','--good'],
+  fixed:['✗ ปากขวดผ่านเร็วเกินไป น้ำหกเกือบทั้งหมด','--bad'],
+  stopgo:['△ เติมเต็ม แต่ต้องหยุดทุกขวด กำลังผลิตลดลง','--warn']
+};
+const rec = {on:false, mr:null, chunks:[], t0:0, plan:null, idx:0, cv:null, g:null, dur:0, kind:'all'};
+function pickMime(){
+  const c = ['video/mp4;codecs=avc1.640028','video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'];
+  return c.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+function hudBox(g,x,y,w,h){ g.fillStyle='rgba(15,20,18,0.72)'; roundRect(g,x,y,w,h,18); g.fill(); }
+function drawHUD(g){
+  const modeTitle = modeText[st.mode].replace(/<[^>]+>/g,'').replace('&amp;','&');
+  const [vt, vc] = verdictText[st.mode];
+  const p = ((st.M % P)+P)%P;
+  // header
+  hudBox(g,32,28,1000,168);
+  g.fillStyle='#ffffff'; g.font='700 40px "Noto Sans Thai", sans-serif'; g.fillText(modeTitle,58,84);
+  g.fillStyle=css(vc); g.font='600 34px "Noto Sans Thai", sans-serif'; g.fillText(vt,58,134);
+  g.fillStyle='#cfd8d3'; g.font='500 27px "IBM Plex Mono", monospace';
+  g.fillText(`Master ${p.toFixed(0)}  ·  Slave ${(st.nozzleX-X0).toFixed(0)} mm  ·  วาล์ว ${st.valve?'เปิด':'ปิด'}${st.mode==='stopgo'?('  ·  สายพาน '+(st.sg.state==='fill'?'หยุด':'เดิน')):''}`,58,178);
+  // chart (top-right)
+  const cw = 620, ch = Math.round(cw * chart.height / Math.max(1,chart.width));
+  hudBox(g,REC_W-cw-56,28,cw+24,ch+64);
+  g.fillStyle='#ffffff'; g.font='600 26px "Noto Sans Thai", sans-serif'; g.fillText('CAM Profile: หัวเติม vs ปากขวด',REC_W-cw-40,68);
+  g.fillStyle=css('--surface'); roundRect(g,REC_W-cw-44,80,cw,ch,10); g.fill();
+  g.drawImage(chart, REC_W-cw-44, 80, cw, ch);
+  // KPI strip
+  const k = kpiValues();
+  const items = [['กำลังผลิต (ขวด/นาที)',k.bpm,'#ffffff'],['เติมได้เฉลี่ย',k.avg,'#ffffff'],['น้ำหกบนสายพาน',k.spill, st.spill>1?css('--bad'):'#ffffff'],['ความเร็วสัมพัทธ์ ขณะเติม',k.rel, k.relOk===null?'#9aa5a0':(k.relOk?css('--good'):css('--bad'))]];
+  const bw = 430, gap = 22, x0 = (REC_W - (4*bw + 3*gap))/2, y0 = REC_H - 150;
+  items.forEach((it,i)=>{
+    const x = x0 + i*(bw+gap); hudBox(g,x,y0,bw,120);
+    g.fillStyle='#cfd8d3'; g.font='500 26px "Noto Sans Thai", sans-serif'; g.fillText(it[0],x+24,y0+42);
+    g.fillStyle=it[2]; g.font='600 48px "IBM Plex Mono", monospace'; g.fillText(it[1],x+24,y0+98);
+  });
+}
+function setRecUI(on){
+  const b = $('recBtn'); b.classList.toggle('on',on);
+  b.textContent = on ? '⏹ หยุดอัด' : '🎥 อัดวิดีโอ HD 1080p';
+  $('recKind').disabled = on;
+}
+function startRec(){
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream){ alert('เบราว์เซอร์นี้อัดวิดีโอไม่ได้ ลองใช้ Chrome หรือ Edge'); return; }
+  rec.kind = $('recKind').value;
+  rec.cv = document.createElement('canvas'); rec.cv.width = REC_W; rec.cv.height = REC_H; rec.g = rec.cv.getContext('2d');
+  document.querySelector('.stage').classList.add('rec');
+  renderer.setPixelRatio(1); renderer.setSize(REC_W, REC_H, false);
+  camera.aspect = REC_W/REC_H; camera.updateProjectionMatrix();
+  const mime = pickMime();
+  const opts = {videoBitsPerSecond: 16000000}; if (mime) opts.mimeType = mime;
+  rec.mr = new MediaRecorder(rec.cv.captureStream(60), opts);
+  rec.chunks = [];
+  rec.mr.ondataavailable = e => { if (e.data && e.data.size) rec.chunks.push(e.data); };
+  rec.mr.onstop = () => {
+    const type = rec.mr.mimeType || mime || 'video/webm';
+    const ext = type.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+    const blob = new Blob(rec.chunks, {type});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Motion_Filling_${rec.kind==='all'?'3modes':st.mode}_1080p.${ext}`;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+    $('recNote').textContent = `บันทึกแล้ว: ${a.download} (${(blob.size/1048576).toFixed(1)} MB) อยู่ในโฟลเดอร์ Downloads`;
+  };
+  rec.plan = rec.kind==='all' ? [['cam',0],['fixed',10],['stopgo',20],[null,30]] : [[st.mode,0],[null,15]];
+  rec.dur = rec.plan[rec.plan.length-1][1];
+  rec.idx = 0; rec.t0 = performance.now(); rec.on = true;
+  st.playing = true; $('play').textContent = '⏸ หยุดชั่วคราว';
+  rec.mr.start(1000);
+  setRecUI(true);
+}
+function stopRec(){
+  if (!rec.on) return;
+  rec.on = false;
+  rec.mr.stop();
+  document.querySelector('.stage').classList.remove('rec');
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  setRecUI(false);
+}
+function recTick(now){
+  const el = (now - rec.t0)/1000;
+  while (rec.idx < rec.plan.length && el >= rec.plan[rec.idx][1]){
+    const m = rec.plan[rec.idx][0]; rec.idx++;
+    if (m === null){ stopRec(); return; }
+    setMode(m);
+  }
+  $('recNote').textContent = `● กำลังอัด ${el.toFixed(0)} / ${rec.dur} วินาที (1920×1080) อย่าสลับแท็บ`;
+}
+$('recBtn').addEventListener('click', ()=> rec.on ? stopRec() : startRec());
+
+// ------------------------------------------------------------------ loop
+function resize(){
+  if (rec.on) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w*renderer.getPixelRatio()) || canvas.height !== Math.round(h*renderer.getPixelRatio())){
+    renderer.setSize(w,h,false); camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+}
+let last = performance.now(), uiT = 0;
+function frame(now){
+  let dt = Math.min(0.05, (now-last)/1000); last = now;
+  resize();
+  if (st.playing){
+    const sub = 4; for (let k=0;k<sub;k++) step(dt/sub);
+  } else dt = 0;
+  syncScene(dt);
+  if (viewAnim){
+    viewAnim.t = Math.min(1, viewAnim.t + (now - (viewAnim.last||now))/900); viewAnim.last = now;
+    const e = viewAnim.t<.5 ? 2*viewAnim.t*viewAnim.t : 1-Math.pow(-2*viewAnim.t+2,2)/2;
+    camera.position.lerpVectors(viewAnim.from.p, viewAnim.to.p, e);
+    controls.target.lerpVectors(viewAnim.from.t, viewAnim.to.t, e);
+    if (viewAnim.t>=1) viewAnim=null;
+  }
+  controls.update();
+  if (rec.on) recTick(now);
+  renderer.render(scene, camera);
+  drawChart();
+  if (rec.on){ rec.g.drawImage(canvas, 0, 0, REC_W, REC_H); drawHUD(rec.g); }
+  uiT += 1; if (uiT % 6 === 0) updateUI();
+  requestAnimationFrame(frame);
+}
+updateUI();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
