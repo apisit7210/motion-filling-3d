@@ -131,21 +131,12 @@ td code,p code{font-family:var(--mono);font-size:12.5px;background:var(--surface
       <output id="spdOut">120 mm/s</output>
     </div>
     <button class="btn" id="play">⏸ หยุดชั่วคราว</button>
-    <div class="recbox">
-      <select id="recKind" aria-label="แบบการอัด">
-        <option value="all">อัดทั้ง 3 โหมด (10 วิ/โหมด)</option>
-        <option value="current">อัดเฉพาะโหมดนี้ (15 วิ)</option>
-      </select>
-      <button class="btn rec-btn" id="recBtn">🎥 อัดวิดีโอ HD 1080p</button>
-    </div>
     <div class="seg" role="group" aria-label="มุมกล้อง">
       <button data-view="overview" aria-pressed="true">ภาพรวม</button>
       <button data-view="close" aria-pressed="false">ใกล้หัวเติม</button>
       <button data-view="top" aria-pressed="false">มุมบน</button>
     </div>
   </div>
-
-  <div class="recnote" id="recNote">ปุ่ม 🎥 อัดจากภาพ 3D โดยตรงที่ 1920×1080 พร้อมชื่อโหมด ตัวเลข และกราฟ CAM ในวิดีโอ เสร็จแล้วไฟล์จะดาวน์โหลดเอง (อย่าสลับแท็บระหว่างอัด)</div>
 
   <div class="kpis">
     <div class="kpi"><div class="k">กำลังผลิต</div><div class="v" id="kBpm">–</div><div class="s">ขวด / นาที</div></div>
@@ -756,7 +747,6 @@ function recTick(now){
   }
   $('recNote').textContent = `● กำลังอัด ${el.toFixed(0)} / ${rec.dur} วินาที (1920×1080) อย่าสลับแท็บ`;
 }
-$('recBtn').addEventListener('click', ()=> rec.on ? stopRec() : startRec());
 
 // ------------------------------------------------------------------ loop
 function resize(){
